@@ -9,7 +9,8 @@ import requests
 from bs4 import BeautifulSoup
 from PIL import Image
 from get_operate_link import get_operate_link
-from crawl_func import get_timetable_dic,get_student_info
+import urllib.parse
+from crawl_func import get_timetable_dic,get_student_info,get_Grade
 
 if __name__ == "__main__":
 
@@ -54,34 +55,46 @@ if __name__ == "__main__":
     }
 
     res = session.post(url, data=postdata, headers=headers)
-
     if '验证码不正确' in res.text:
         print("你输入的验证码不正确，请重新登录")
+        exit()
+    elif '密码错误' in res.text:
+        print("你输入的学号或密码不正确")
         exit()
 
     # 登录成功后，返回的是你教务系统的主页源代码
     r = session.get('http://'+host + "/" + 'xs_main.aspx?xh='+ studentid,headers=headers)
-
     link_dic = get_operate_link(host, r.text)
-    print(link_dic)
+    for i in range(len(list(link_dic.keys()))):
+        print(list(link_dic.keys())[i], ':', link_dic[list(link_dic.keys())[i]])
 
-    # 获取学生个人课表
+    # 获取学生个人课表和个人信息
     student_class = session.get(link_dic['学生个人课表'], headers=headers)
-    print(get_student_info(student_class.text))
-    print(get_timetable_dic(student_class.text))
+    stu_info = get_student_info(student_class.text)
+    for i in range(len(list(stu_info.keys()))):
+        print(list(stu_info.keys())[i], ':', stu_info[list(stu_info.keys())[i]])
+    stu_timetable = get_timetable_dic(student_class.text)
+    for i in range(len(stu_timetable['classes'])):
+        print(stu_timetable['classes'][i])
 
     # 查询个人成绩
     student_grade_query = session.get(link_dic['成绩查询'], headers=headers)
-    print(student_grade_query.text)
     soup = BeautifulSoup(student_grade_query.text, 'lxml')
     __VIEWSTATE = soup.find_all('input', type="hidden")[0]['value']
     query_post_data = {
         '__VIEWSTATE': __VIEWSTATE,
-        'ddlXN':'',
+        'ddlXN': '2017-2018',
         'ddlXQ': '1',
-        'Button1': ''
+        'Button1': '按学期查询'
     }
-    headers['Referer'] = link_dic['成绩查询']
-    user_grade = session.post(link_dic['成绩查询'], data=query_post_data, headers=headers)
-    print('user_grade',user_grade.text)
+    query_header = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36',
+        'Host': host,
+        'Referer': urllib.parse.quote(link_dic['成绩查询'], encoding='gbk',safe='/:?=&')
+    }
+    user_grade = session.post(link_dic['成绩查询'], data=query_post_data, headers=query_header)
+    stu_grade = (get_Grade(user_grade.text))
+    for i in range(len(stu_grade)):
+        print(stu_grade[i])
+
 
